@@ -1,0 +1,16 @@
+services:
+  curtailment:
+    build: .
+    image: wind-curtailment:local
+    ports:
+      - "8000:8000"
+    environment:
+      # 生产部署请改成随机长串：python -c "import secrets;print(secrets.token_hex(32))"
+      CURTAILMENT_SECRET: "change-me-before-deploy"
+      CURTAILMENT_DB: /app/instance/curtailment.sqlite3
+    volumes:
+      - curtailment-data:/app/instance
+    restart: unless-stopped
+
+volumes:
+  curtailment-data:

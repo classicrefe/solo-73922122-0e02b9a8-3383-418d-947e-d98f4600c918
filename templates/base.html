@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}限发损失归因{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="{{ url_for('index') }}">风电限发 · 损失归因入仓</a>
+  <nav>
+    <a href="{{ url_for('index') }}">日报</a>
+    <a href="{{ url_for('orders') }}">限发单</a>
+  </nav>
+</header>
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flashes">
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="foot">
+  <span>电量单位 kWh，时刻均按 UTC；每格 15 分钟。</span>
+</footer>
+</body>
+</html>

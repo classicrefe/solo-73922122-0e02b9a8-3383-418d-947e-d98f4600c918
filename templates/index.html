@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h1>导入计量表</h1>
+  <p class="hint">
+    CSV 需含时刻（UTC）、可发量、实发量三列，支持中英文表头；也可选填风机列。
+    无表头时按“时刻, 可发量, 实发量[, 风机]”解析。时刻必须对齐 15 分钟，重复导入同格会覆盖。
+  </p>
+  <form method="post" action="{{ url_for('import_meter') }}" enctype="multipart/form-data" class="grid-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label>风机编号
+      <input name="turbine" list="turbine-list" value="{{ request.form.get('turbine', '') }}" placeholder="WT-001">
+    </label>
+    <datalist id="turbine-list">
+      {% for t in turbines %}<option value="{{ t }}">{% endfor %}
+    </datalist>
+    <label>CSV 文件
+      <input type="file" name="file" accept=".csv,text/csv" required>
+    </label>
+    <label class="inline">
+      <input type="checkbox" name="replace"> 先删除该风机在这些日期的旧计量
+    </label>
+    <button type="submit">导入并重算</button>
+  </form>
+</section>
+
+<section class="card">
+  <h1>按日归因结果</h1>
+  {% if paused %}
+    <div class="flash error">
+      有 {{ paused|length }} 张限发单因实发量超过每格上限被整单暂停（导入计量后可能出现）：
+      {% for o in paused %}<a href="{{ url_for('order_detail', order_no=o.order_no) }}">{{ o.order_no }}</a>{% if not loop.last %}、{% endif %}{% endfor %}
+      请核对或更正。
+    </div>
+  {% endif %}
+  <form method="get" action="{{ url_for('index') }}" class="inline-form">
+    <label>风机
+      <select name="turbine" onchange="this.form.submit()">
+        {% for t in turbines %}
+          <option value="{{ t }}" {% if t == selected %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <noscript><button type="submit">查看</button></noscript>
+  </form>
+
+  {% if not turbines %}
+    <p class="empty">还没有计量数据，请先导入一台风机的 15 分钟计量表。</p>
+  {% elif not days %}
+    <p class="empty">该风机暂无归因结果。</p>
+  {% else %}
+  <table class="data">
+    <thead>
+      <tr>
+        <th>日期 (UTC)</th>
+        <th>格数</th>
+        <th>限发损失合计</th>
+        {% set causes = [] %}
+        {% for d in days %}{% for c in d.losses.keys() %}{% if c not in causes %}{% set _ = causes.append(c) %}{% endif %}{% endfor %}{% endfor %}
+        {% for cause in causes|sort %}<th class="num">{{ cause }}</th>{% endfor %}
+        <th class="num">待查</th>
+        <th>待查格</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in days %}
+      <tr>
+        <td>{{ d.date }}</td>
+        <td>{{ d.slot_count }}</td>
+        <td class="num">{{ d.curtailment }}</td>
+        {% for cause in causes|sort %}
+          <td class="num">{{ d.losses.get(cause, '—') }}</td>
+        {% endfor %}
+        <td class="num {% if d.unsplit > 0 %}warn{% endif %}">{{ d.unsplit }}</td>
+        <td>{% if d.unsplit_count %}{{ d.unsplit_count }} 格待查{% else %}—{% endif %}</td>
+        <td><a href="{{ url_for('day_detail', turbine=selected, date=d.date) }}">明细</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="hint">损失合计 = 该日各格（可发量 − 实发量）之和；各原因 + 待查应等于该合计。</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h1>最近限发单 <a class="small" href="{{ url_for('orders') }}">全部 {{ order_count }} 张 →</a></h1>
+  {% if orders %}
+  <table class="data compact">
+    <thead><tr><th>单号</th><th>原因</th><th>起</th><th>止</th><th class="num">每格上限</th><th>修订</th></tr></thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <td><a href="{{ url_for('order_detail', order_no=o.order_no) }}">{{ o.order_no }}</a></td>
+        <td>{{ o.cause }}</td>
+        <td>{{ o.start_utc }}</td>
+        <td>{{ o.end_utc }}</td>
+        <td class="num">{{ o.cap }}</td>
+        <td>r{{ o.revision }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty">还没有限发单。</p>
+  {% endif %}
+</section>
+{% endblock %}

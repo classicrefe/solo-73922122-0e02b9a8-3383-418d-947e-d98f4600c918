@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ day.turbine }} {{ day.date }} 归因明细{% endblock %}
+{% block content %}
+<section class="card">
+  <p><a href="{{ url_for('index', turbine=day.turbine) }}">← 返回日报</a></p>
+  <h1>{{ day.turbine }} · {{ day.date }}（UTC）</h1>
+  <p class="hint">计算于 {{ day.computed_at }}</p>
+
+  <div class="summary">
+    <div><span class="label">限发损失合计</span><strong>{{ day.curtailment }}</strong></div>
+    {% for cause, amount in day.losses.items() %}
+      <div><span class="label">{{ cause }}</span><strong>{{ amount }}</strong></div>
+    {% endfor %}
+    <div class="{% if day.unsplit > 0 %}warn{% endif %}"><span class="label">待查</span><strong>{{ day.unsplit }}</strong></div>
+  </div>
+
+  {% if day.paused_orders %}
+    <div class="flash error">
+      以下单据在导入新计量后出现实发量超上限的冲突，已整单暂停参与归因，请核对或更正：
+      {{ day.paused_orders.keys()|sort|join('、') }}
+    </div>
+  {% endif %}
+
+  <h2>覆盖本日的限发单</h2>
+  {% if day.orders %}
+  <table class="data compact">
+    <thead><tr><th>单号</th><th>原因</th><th>起</th><th>止</th><th class="num">每格上限</th><th>修订</th><th>状态</th></tr></thead>
+    <tbody>
+      {% for o in day.orders %}
+      <tr>
+        <td><a href="{{ url_for('order_detail', order_no=o.order_no) }}">{{ o.order_no }}</a></td>
+        <td>{{ o.cause }}</td>
+        <td>{{ o.start_utc }}</td>
+        <td>{{ o.end_utc }}</td>
+        <td class="num">{{ o.cap }}</td>
+        <td>r{{ o.revision }}</td>
+        <td>{% if o.order_no in day.paused_orders %}<span class="warn">冲突已暂停</span>{% else %}生效{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty">本日没有生效的限发单，全部损失应为待查。</p>
+  {% endif %}
+  <p class="hint">同格同原因取最低上限；各段均分给上限不高于段下端的原因。</p>
+</section>
+
+{% if day.unsplit_slots %}
+<section class="card">
+  <h2>待查格（{{ day.unsplit_slots|length }} 格，合计 {{ day.unsplit }} kWh）</h2>
+  <p class="hint">这些格有电量分不出去：没有上限足够低的原因能解释这段损失，需值班员核查。</p>
+  <table class="data compact">
+    <thead><tr><th>时刻 (UTC)</th><th class="num">待查电量</th></tr></thead>
+    <tbody>
+      {% for slot in day.unsplit_slots %}
+      <tr><td>{{ slot.start_utc }}</td><td class="num warn">{{ slot.unsplit }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>逐格明细</h2>
+  <table class="data">
+    <thead>
+      <tr>
+        <th>时刻 (UTC)</th>
+        <th class="num">可发量</th>
+        <th class="num">实发量</th>
+        <th class="num">损失</th>
+        {% set causes = [] %}
+        {% for s in day.slots %}{% for c in s.losses.keys() %}{% if c not in causes %}{% set _ = causes.append(c) %}{% endif %}{% endfor %}{% endfor %}
+        {% for cause in causes|sort %}<th class="num">{{ cause }}</th>{% endfor %}
+        <th class="num">待查</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in day.slots %}
+      <tr {% if s.unsplit > 0 %}class="row-warn"{% endif %}>
+        <td>{{ s.start_utc }}</td>
+        <td class="num">{{ s.available }}</td>
+        <td class="num">{{ s.actual }}</td>
+        <td class="num">{{ s.curtailment }}</td>
+        {% for cause in causes|sort %}
+          <td class="num">{{ s.losses.get(cause, '—') }}</td>
+        {% endfor %}
+        <td class="num {% if s.unsplit > 0 %}warn{% endif %}">{{ s.unsplit }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

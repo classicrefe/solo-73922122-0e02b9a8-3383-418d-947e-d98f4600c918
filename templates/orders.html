@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}限发单{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>填写 / 更正限发单</h1>
+  <p class="hint">
+    同单号再次提交即为整单更正（修订号 +1）。更正只重算新旧单覆盖日期的归因；
+    期间其他限发单照常生效。若覆盖格内实发量超过每格上限，整单退回，原单据与归因结果不变。
+  </p>
+  {% set p = prefill or {} %}
+  <form method="post" action="{{ url_for('submit_order') }}" class="grid-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label>单号
+      <input name="order_no" value="{{ p.get('order_no', '') }}" required maxlength="64" placeholder="CUR-2026-001">
+    </label>
+    <label>原因
+      <input name="cause" value="{{ p.get('cause', '') }}" required maxlength="64" list="cause-list" placeholder="电网调度 / 设备检修 …">
+    </label>
+    <datalist id="cause-list">
+      <option value="电网调度">
+      <option value="设备检修">
+      <option value="消纳受限">
+    </datalist>
+    <label>开始时刻 (UTC)
+      <input name="start_utc" value="{{ p.get('start_utc', '') }}" required placeholder="2026-01-01T00:00:00Z">
+    </label>
+    <label>结束时刻 (UTC，不含)
+      <input name="end_utc" value="{{ p.get('end_utc', '') }}" required placeholder="2026-01-01T06:00:00Z">
+    </label>
+    <label>每格电量上限 (kWh)
+      <input name="cap" value="{{ p.get('cap', '') }}" required inputmode="decimal" placeholder="0">
+    </label>
+    <button type="submit">保存并重算</button>
+  </form>
+</section>
+
+<section class="card">
+  <h1>全部限发单（{{ orders|length }}）</h1>
+  {% if orders %}
+  <table class="data">
+    <thead>
+      <tr><th>单号</th><th>原因</th><th>起</th><th>止</th><th class="num">每格上限</th><th>修订</th><th>状态</th><th>更新时间</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for o in orders %}
+      <tr>
+        <td><a href="{{ url_for('order_detail', order_no=o.order_no) }}">{{ o.order_no }}</a></td>
+        <td>{{ o.cause }}</td>
+        <td>{{ o.start_utc }}</td>
+        <td>{{ o.end_utc }}</td>
+        <td class="num">{{ o.cap }}</td>
+        <td>r{{ o.revision }}</td>
+        <td>{% if o.conflicted %}<span class="warn">冲突已暂停</span>{% else %}生效{% endif %}</td>
+        <td>{{ o.updated_at }}</td>
+        <td>
+          <a href="{{ url_for('orders', order_no=o.order_no, cause=o.cause, start_utc=o.start_utc, end_utc=o.end_utc, cap=o.cap) }}">更正</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="empty">还没有限发单。</p>
+  {% endif %}
+</section>
+{% endblock %}
